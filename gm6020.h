@@ -4,13 +4,13 @@
 #include "mbed.h"
 #include "CANManager.h"
 
-enum MotorType{
-    m2006,
-    m3508
+enum MotorControlType{
+    SPD,
+    TORQUE
 };
 
 
-class rbms : public CANReceiver{
+class gm6020 : public CANReceiver{
     public:
         enum ControlMode {
             SPD_MODE,
@@ -18,8 +18,8 @@ class rbms : public CANReceiver{
             POS_MODE
         };
 
-        rbms(CAN &can,bool motor_type,int motor_num);
-        rbms(CAN &can,bool* motor_type,int motor_num);
+        gm6020(CAN &can,bool motor_type,int motor_num);
+        gm6020(CAN &can,bool* motor_type,int motor_num);
 
         /**
          * @brief 指定したモーターの制御モードを切り替え
@@ -91,7 +91,8 @@ class rbms : public CANReceiver{
         bool handle_message(const CANMessage &msg) override;
         void spd_control();
         int rbms_send();
-        void rbms_read(CANMessage &msg, short *rotation,short *speed);
+        void rbms_read(CANMessage &msg, short *rotation,short *speed);//まぁ。。後でやる？
+        void rbms_read(short *rotation,short *speed);
         
     private:
         void initialize();

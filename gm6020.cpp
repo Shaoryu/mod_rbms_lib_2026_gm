@@ -1,44 +1,36 @@
-#include "rbms.h"
+#include "gm6020.h"
 #include "mbed.h"
 #include <chrono>
 #include <cmath>
 #include <cstdlib>
 
-rbms::rbms(CAN &can,bool* motor_type,int motor_num)
+gm6020::gm6020(CAN &can,bool* motor_type,int motor_num)
     : _can(can),_motor_type(motor_type),_motor_num(motor_num){
-    for(int id=0;id<_motor_num;id++){
-        if (_motor_type[id]) { // M3508
-            _kp = 35.0f; _ki = 50.0f; _kd = 0.0f;
-            _kp_p = 5.0f; _ki_p = 0.0f; _kd_p = 0.15f;
-            _motor_max[id] = 16384;
-        } else { // M2006
-            _kp = 15.0f; _ki = 12.0f; _kd = 0.0f;
-            _kp_p = 4.5f; _ki_p = 0.0f; _kd_p = 0.25f;
-            _motor_max[id] = 10000;
-        }
-    }
     initialize();
 }
 
-rbms::rbms(CAN &can,bool motor_type,int motor_num)
+gm6020::gm6020(CAN &can,bool motor_type,int motor_num)
     : _can(can),_motor_num(motor_num){
     _motor_type = (bool*)malloc(sizeof(bool) * 8);
     for(int id=0;id<_motor_num;id++){
         _motor_type[id]=motor_type;
-        if (_motor_type[id]) { // M3508
+    }
+        
+    initialize();
+}
+
+void gm6020::initialize(){
+    for(int id=0;id<_motor_num;id++){
+        if (_motor_type[id]) { // トルク
             _kp = 35.0f; _ki = 50.0f; _kd = 0.0f;
             _kp_p = 5.0f; _ki_p = 0.0f; _kd_p = 0.15f;
             _motor_max[id] = 16384;
-        } else { // M2006
+        } else { // 速度(未実装)
             _kp = 15.0f; _ki = 12.0f; _kd = 0.0f;
             _kp_p = 4.5f; _ki_p = 0.0f; _kd_p = 0.25f;
             _motor_max[id] = 10000;
         }
     }
-    initialize();
-}
-
-void rbms::initialize(){
     for(int i = 0; i < 8; i++) {
         _control_modes[i] = SPD_MODE;
         _target_speeds[i] = 0;
@@ -70,14 +62,14 @@ void rbms::initialize(){
     }
 }
 
-void rbms::set_gear_ratio(int id, float gear_raito){
+void gm6020::set_gear_ratio(int id, float gear_raito){
     if (id < 0 || id >= _motor_num) return;
     _data_mutex.lock();
     _gear_ratio[id] = gear_raito==0.f ? (_motor_type ? 19.2f:36.f) : gear_raito;
     _data_mutex.unlock();
 }
 
-void rbms::set_control_mode(int id, ControlMode mode) {
+void gm6020::set_control_mode(int id, ControlMode mode) {
     if (id < 0 || id >= _motor_num) return;
     _data_mutex.lock();
     if(mode==TRQ_MODE)_FF_torque[id]=0;//入れないと流石にバグる
@@ -89,28 +81,28 @@ void rbms::set_control_mode(int id, ControlMode mode) {
     _data_mutex.unlock();
 }
 
-void rbms::set_target_speed(int id, int speed) {
+void gm6020::set_target_speed(int id, int speed) {
     if (id < 0 || id >= _motor_num) return;
     _data_mutex.lock();
     _target_speeds[id] = speed;
     _data_mutex.unlock();
 }
 
-void rbms::set_target_torque(int id, int torque) {
+void gm6020::set_target_torque(int id, int torque) {
     if (id < 0 || id >= _motor_num) return;
     _data_mutex.lock();
     _target_torques[id] = torque;
     _data_mutex.unlock();
 }
 
-void rbms::set_target_angle(int id, float angle) {
+void gm6020::set_target_angle(int id, float angle) {
     if (id < 0 || id >= _motor_num) return;
     _data_mutex.lock();
     _target_angles[id] = angle;
     _data_mutex.unlock();
 }
 
-void rbms::reset_angle(int id) {
+void gm6020::reset_angle(int id) {
     if (id < 0 || id >= _motor_num) return;
     _data_mutex.lock();
     _pid_states[id].accumulated_angle = 0.0f;
@@ -118,7 +110,7 @@ void rbms::reset_angle(int id) {
     _data_mutex.unlock();
 }
 
-void rbms::set_pid_gains(float kp, float ki, float kd) {
+void gm6020::set_pid_gains(float kp, float ki, float kd) {
     _data_mutex.lock();
     _kp = kp;
     _ki = ki;
@@ -126,7 +118,7 @@ void rbms::set_pid_gains(float kp, float ki, float kd) {
     _data_mutex.unlock();
 }
 
-void rbms::set_pos_pid_gains(float kp, float ki, float kd) {
+void gm6020::set_pos_pid_gains(float kp, float ki, float kd) {
     _data_mutex.lock();
     _kp_p = kp;
     _ki_p = ki;
@@ -134,28 +126,28 @@ void rbms::set_pos_pid_gains(float kp, float ki, float kd) {
     _data_mutex.unlock();
 }
 
-void rbms::set_speed_limit(int id, float max_speed) {
+void gm6020::set_speed_limit(int id, float max_speed) {
     if (id < 0 || id >= _motor_num) return;
     _data_mutex.lock();
     _pid_states[id].speed_limit_rpm = max_speed;
     _data_mutex.unlock();
 }
 
-void rbms::set_accel_limit(int id, float max_accel) {
+void gm6020::set_accel_limit(int id, float max_accel) {
     if (id < 0 || id >= _motor_num) return;
     _data_mutex.lock();
     _pid_states[id].accel_limit_rpm_s = max_accel;
     _data_mutex.unlock();
 }
 
-void rbms::set_FF_torque(int id, int torque) {
+void gm6020::set_FF_torque(int id, int torque) {
     if (id < 0 || id >= _motor_num) return;
     _data_mutex.lock();
     _FF_torque[id]=torque;
     _data_mutex.unlock();
 }
 
-void rbms::set_angle_clamp(int id, float max_angle, float min_angle){
+void gm6020::set_angle_clamp(int id, float max_angle, float min_angle){
     if (id < 0 || id >= _motor_num) return;
     if (max_angle>min_angle){
         _data_mutex.lock();
@@ -170,7 +162,7 @@ void rbms::set_angle_clamp(int id, float max_angle, float min_angle){
     }
 }
 
-float rbms::pid_calculate(int id, float target, float current, float dt) {
+float gm6020::pid_calculate(int id, float target, float current, float dt) {
     float error = target - current;
     _pid_states[id].integral += (error + _pid_states[id].prev_err) * dt / 2.0f;
 
@@ -187,7 +179,7 @@ float rbms::pid_calculate(int id, float target, float current, float dt) {
     return output;
 }
 
-float rbms::pos_pid_calculate(int id, float target, float current, float dt, float limit) {
+float gm6020::pos_pid_calculate(int id, float target, float current, float dt, float limit) {
     float error = target - current;
     _pid_states[id].pos_integral += (error + _pid_states[id].pos_prev_err) * dt / 2.0f;
 
@@ -205,11 +197,11 @@ float rbms::pos_pid_calculate(int id, float target, float current, float dt, flo
     return out_target_speed;
 }
 
-void rbms::spd_control() {
-    _thread.start(callback(this, &rbms::control_thread_entry));
+void gm6020::spd_control() {
+    _thread.start(callback(this, &gm6020::control_thread_entry));
 }
 
-void rbms::control_thread_entry() {
+void gm6020::control_thread_entry() {
     while (true) {
         _event_flags.wait_any(0x01); 
 
@@ -275,8 +267,8 @@ void rbms::control_thread_entry() {
                     if (mode == POS_MODE) {
                         float error_angle = target_a - current_angle;
                         float abs_error = std::fabs(error_angle);
-                        printf(">speed:%f\n",current_rpm);
-                        printf(">pos:%f\n",current_angle);
+                        //printf(">speed:%f\n",current_rpm);
+                        //printf(">pos:%f\n",current_angle);
                         //printf(">dt:%f\n",dt);
                         const float SETTLING_THRESHOLD = 25.0f; 
                         const float DEAD_BAND = 2.5f;
@@ -343,8 +335,8 @@ void rbms::control_thread_entry() {
     }
 }
 
-int rbms::rbms_send() {
-    _tx_msg_low.id = 0x200; _tx_msg_low.len = 8;
+int gm6020::rbms_send() {
+    _tx_msg_low.id = 0x1fe; _tx_msg_low.len = 8;
     _tx_msg_high.id = 0x1ff; _tx_msg_high.len = 8;
     _data_mutex.lock();
     for(int i = 0; i < _motor_num; i++) {
@@ -361,7 +353,17 @@ int rbms::rbms_send() {
     return (_can.write(_tx_msg_low) && (_motor_num > 4 ? _can.write(_tx_msg_high) : true)) ? 1 : -1;
 }
 
-void rbms::parse_can_data(int id, const CANMessage &msg, short *rotation, short *speed) {
+void gm6020::rbms_read(short *rotation,short *speed){
+    CANMessage local_msg;
+    for (int id=0; id<_motor_num; id++) {
+        _data_mutex.lock();
+        local_msg = _msg_buffer[id];
+        _data_mutex.unlock();
+        parse_can_data(id, local_msg, rotation, speed);
+    }
+}
+
+void gm6020::parse_can_data(int id, const CANMessage &msg, short *rotation, short *speed) {
     uint16_t raw_angle = (msg.data[0] << 8) | (msg.data[1] & 0xff);
     *speed = (int16_t)((msg.data[2] << 8) | (msg.data[3] & 0xff));
 
@@ -388,8 +390,8 @@ void rbms::parse_can_data(int id, const CANMessage &msg, short *rotation, short 
 }
 
 
-bool rbms::handle_message(const CANMessage &msg) {
-    int id_idx = msg.id - 0x201;
+bool gm6020::handle_message(const CANMessage &msg) {
+    int id_idx = msg.id - 0x205;
     if (id_idx >= 0 && id_idx < _motor_num) {
         _data_mutex.lock();
         _msg_buffer[id_idx] = msg;
