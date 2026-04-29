@@ -1,0 +1,2 @@
+# mod_rbms_lib_2026_gm
+mod_rbms_lib_2026のgm版
