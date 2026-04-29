@@ -65,7 +65,7 @@ void gm6020::initialize(){
 void gm6020::set_gear_ratio(int id, float gear_raito){
     if (id < 0 || id >= _motor_num) return;
     _data_mutex.lock();
-    _gear_ratio[id] = gear_raito==0.f ? (_motor_type ? 19.2f:36.f) : gear_raito;
+    _gear_ratio[id] = 1;
     _data_mutex.unlock();
 }
 
