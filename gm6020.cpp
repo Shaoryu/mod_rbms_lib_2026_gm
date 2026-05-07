@@ -25,11 +25,11 @@ void gm6020::initialize(){
         if (_motor_type[id]) { // トルク//動きはする
             _kp = 45.0f; _ki = 35.0f; _kd = 0.0f;
             _kp_p = 5.0f; _ki_p = 0.0f; _kd_p = 0.15f;
-            _motor_max[id] = 10000;
+            _motor_max[id] = 16384;
         } else { // 速度(未実装)
             _kp = 15.0f; _ki = 12.0f; _kd = 0.0f;
-            _kp_p = 4.5f; _ki_p = 0.0f; _kd_p = 0.25f;
-            _motor_max[id] = 10000;
+            //_kp_p = 4.5f; _ki_p = 0.0f; _kd_p = 0.25f;
+            _motor_max[id] = 25000;
         }
     }
     for(int i = 0; i < 8; i++) {
@@ -66,7 +66,7 @@ void gm6020::initialize(){
 void gm6020::set_gear_ratio(int id, float gear_raito){
     if (id < 0 || id >= _motor_num) return;
     _data_mutex.lock();
-    _gear_ratio[id] = 1;
+    _gear_ratio[id] = gear_raito==0?1:gear_raito;
     _data_mutex.unlock();
 }
 
@@ -321,7 +321,7 @@ void gm6020::control_thread_entry() {
                     //printf(">speed:%f\n",current_rpm);
                     //printf(">pos:%f\n",current_angle);
                     //printf(">dt:%f\n",dt);
-                    printf(">spd:%f\n>pos:%f\n>tar:%f\n",current_rpm,current_angle,raw_target_rpm);
+                    //printf(">spd:%f\n>pos:%f\n>tar:%f\n",current_rpm,current_angle,raw_target_rpm);
                     }   
                     //printf(">speed_set:%f\n",raw_target_rpm);
                     final_out = (int)pid_calculate(id, _pid_states[id].current_target_rpm, current_rpm, dt);
@@ -348,7 +348,7 @@ void gm6020::control_thread_entry() {
 
 int gm6020::rbms_send() {
     _tx_msg_low.id = 0x1fe; _tx_msg_low.len = 8;
-    _tx_msg_high.id = 0x1ff; _tx_msg_high.len = 8;
+    _tx_msg_high.id = 0x2fe; _tx_msg_high.len = 8;
     _data_mutex.lock();
     for(int i = 0; i < _motor_num; i++) {
         int val = _output_torques[i];
